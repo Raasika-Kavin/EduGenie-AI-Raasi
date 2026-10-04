@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="EduGenie AI learning assistant">
+  <title>EduGenie — Learn with clarity</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/"><span class="brand-mark">✦</span> EduGenie</a>
+  <span class="tagline">Your AI study companion</span>
+</header>
+<main class="shell">
+  <section class="hero">
+    <p class="eyebrow">LEARN SMARTER, EVERY DAY</p>
+    <h1>Make every concept <span>click.</span></h1>
+    <p class="intro">Ask questions, simplify complex topics, practice with quizzes, and build your learning path.</p>
+  </section>
+  <section class="workspace">
+    <form id="study-form">
+      <label for="task">What would you like to do?</label>
+      <select id="task" name="task">
+        <option value="explain">Explain a concept</option>
+        <option value="qa">Ask a question</option>
+        <option value="quiz">Generate a quiz</option>
+        <option value="summarize">Summarize text</option>
+        <option value="learn">Recommend a learning path</option>
+      </select>
+      <label for="level">Your learning level</label>
+      <select id="level" name="level">
+        <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
+      </select>
+      <label for="text" id="input-label">Enter a topic or concept</label>
+      <textarea id="text" name="text" rows="7" minlength="2" maxlength="20000"
+        placeholder="For example: Explain photosynthesis with a simple example..." required></textarea>
+      <div class="form-footer">
+        <span class="hint">Tip: Include the passage when generating a quiz or summary.</span>
+        <button id="submit" type="submit"><span>Generate</span><span aria-hidden="true">→</span></button>
+      </div>
+    </form>
+  </section>
+  <section id="result-section" class="result-section" aria-live="polite" hidden>
+    <div class="result-heading"><div><p class="eyebrow">YOUR STUDY RESULT</p><h2 id="result-title">Here you go</h2></div>
+      <button id="copy" class="copy-button" type="button">Copy result</button></div>
+    <div id="result" class="result-card"></div>
+  </section>
+  <p class="disclaimer">AI can make mistakes. Check important information with trusted learning materials.</p>
+</main>
+<script>
+const form = document.querySelector("#study-form");
+const task = document.querySelector("#task");
+const textArea = document.querySelector("#text");
+const submit = document.querySelector("#submit");
+const resultSection = document.querySelector("#result-section");
+const result = document.querySelector("#result");
+const labels = {
+  explain: "Enter a topic or concept", qa: "Type your question",
+  quiz: "Paste a passage or enter a topic", summarize: "Paste the text to summarize",
+  learn: "What topic do you want to learn?"
+};
+task.addEventListener("change", () => {
+  document.querySelector("#input-label").textContent = labels[task.value];
+  textArea.placeholder = labels[task.value] + "...";
+});
+function renderResult(data) {
+  result.replaceChildren();
+  if (Array.isArray(data)) {
+    data.forEach((q, i) => {
+      const card = document.createElement("article"); card.className = "quiz-question";
+      const heading = document.createElement("h3"); heading.textContent = `${i + 1}. ${q.question}`; card.append(heading);
+      const options = document.createElement("div"); options.className = "options";
+      q.options.forEach(option => {
+        const button = document.createElement("button"); button.type = "button"; button.className = "option";
+        button.textContent = option;
+        button.addEventListener("click", () => {
+          [...options.children].forEach(b => b.disabled = true);
+          const correct = option === q.correct_answer;
+          button.classList.add(correct ? "correct" : "incorrect");
+          feedback.textContent = (correct ? "Correct! " : `Not quite. Correct answer: ${q.correct_answer}. `) + (q.explanation || "");
+          feedback.hidden = false;
+          if (!correct) [...options.children].find(b => b.textContent === q.correct_answer)?.classList.add("correct");
+        });
+        options.append(button);
+      });
+      const feedback = document.createElement("p"); feedback.className = "feedback"; feedback.hidden = true;
+      card.append(options, feedback); result.append(card);
+    });
+  } else {
+    const pre = document.createElement("div"); pre.className = "text-result"; pre.textContent = String(data); result.append(pre);
+  }
+}
+form.addEventListener("submit", async event => {
+  event.preventDefault();
+  const selected = task.value;
+  const endpoints = {qa:"/qa", explain:"/explain", quiz:"/quiz", summarize:"/summarize", learn:"/learn/recommendations"};
+  submit.disabled = true; submit.querySelector("span:first-child").textContent = "Thinking…";
+  resultSection.hidden = false; result.textContent = "EduGenie is preparing your result…";
+  document.querySelector("#result-title").textContent = selected === "qa" ? "Your answer" : selected === "quiz" ? "Practice quiz" : "Your learning result";
+  try {
+    const response = await fetch(endpoints[selected], {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({task:selected, text:textArea.value.trim(), level:document.querySelector("#level").value})
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Request failed.");
+    renderResult(payload.result);
+  } catch (error) {
+    result.textContent = error.message + " Check your API key and server terminal.";
+  } finally {
+    submit.disabled = false; submit.querySelector("span:first-child").textContent = "Generate";
+  }
+});
+document.querySelector("#copy").addEventListener("click", async () => {
+  const content = result.innerText;
+  try { await navigator.clipboard.writeText(content); document.querySelector("#copy").textContent = "Copied!"; }
+  catch { document.querySelector("#copy").textContent = "Copy unavailable"; }
+  setTimeout(() => document.querySelector("#copy").textContent = "Copy result", 1600);
+});
+</script>
+</body>
+</html>
